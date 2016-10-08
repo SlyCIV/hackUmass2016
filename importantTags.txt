@@ -1,0 +1,10 @@
+no person
+person
+people
+boy
+girl
+woman
+man
+child
+adolescent
+adult
