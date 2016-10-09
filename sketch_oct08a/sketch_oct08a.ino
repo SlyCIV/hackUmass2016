@@ -4,8 +4,8 @@ SevSeg sevseg;
 
 const int analogPin = 1;
 const int tempPin = 3;
-const int threshHold = 700; //Sound threshold
-const int knockThreshHold = 700; //Knock threshold
+const int threshHold = 600; //Sound threshold
+const int knockThreshHold = 550; //Knock threshold
 const int increments = 50; //Size of array and stuff
 
 int soundLevel = 0; //The sound level read from the mic
@@ -31,7 +31,7 @@ void setup() {
 
 void loop() {
   soundLevel = analogRead(analogPin);
-  if(soundLevel>900 || soundLevel<400){
+  if(soundLevel>900 || soundLevel<200){
     soundLevel = 500;
   }
   a[count] = soundLevel;
