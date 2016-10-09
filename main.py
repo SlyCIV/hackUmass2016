@@ -10,15 +10,20 @@ import serial
 import sys
 import time
 
+# Pull the arguments in command line to avoid local storage
 arguments = sys.argv
 
+# Only to ports were available on our Raspberry Pi model
+# TODO: implement serial binding on alternative OS
 try:
     ser = serial.Serial('/dev/ttyACM0', 9600)
 except:
     ser = serial.Serial('/dev/ttyACM1', 9600)
 
+# Sign in to Twilio to remote SMS from python
 client = TwilioRestClient(arguments[4], arguments[5])
 
+# Constant refresh loop that will continuously catch sound
 while(True):
     temp = ser.readline()
     if(temp.startswith("Sound: ")):
