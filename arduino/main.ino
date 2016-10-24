@@ -1,151 +1,142 @@
-#include <SevSeg.h>
+#include <Wire.h>
+#include "rgb_lcd.h"
 
-SevSeg sevseg;
+rgb_lcd lcd;
+const int pinAdc = A0;
 
-const int analogPin = 1;
-const int tempPin = 3;
-const int threshHold = 600; //Sound threshold
-const int knockThreshHold = 550; //Knock threshold
-const int increments = 50; //Size of array and stuff
+int cR;
+int cG;
+int cB;
 
-int soundLevel = 0; //The sound level read from the mic
-int count = 0;
-int a[increments];
-int knock = 0;
-int strikes = 0;
+const int quiet = 50;
+const int loud = 150;
+//const int loudThreshold;
+const int knockThreshold = 500;
+const int ARRAYSIZE = 100;
+int soundLevels[ARRAYSIZE]; //int array of all the sound levels in the past 100ms
+int soundIndex; //index of soundLevels array
 
-void setup() {
- byte numDigits = 4; 
- byte digitPins[] = {10, 11, 12, 13};
- byte segmentPins[] = {2, 3, 4, 5, 6, 7, 8, 9};
+int sLvl; //current sound level
+int average;
+int total;
+String dots;
+int dotsCount;
 
-  sevseg.begin(COMMON_CATHODE, numDigits, digitPins, segmentPins);
-  sevseg.setBrightness(90);
-  
-  Serial.begin(9600);
-  //pinMode(tempPin, INPUT);
 
-  //fills array A with zeros
-  fillArrayA();
-}
+void setup() 
+{
+    // set up the LCD's number of columns and rows:
+    lcd.begin(16, 2);
 
-void loop() {
-  soundLevel = analogRead(analogPin);
-  if(soundLevel>900 || soundLevel<200){
-    soundLevel = 500;
-  }
-  a[count] = soundLevel;
-  
-  Serial.print("Sound: ");
-  Serial.println(soundLevel);
-  //Serial.print("Sound Average: ");
-  //Serial.println(averageOfA());
-  //Serial.print("knocker: ");
-  //Serial.println(digitalRead(tempPin));
+    cR = 255;
+    cG = 150;
+    cB = 0;
+    lcd.setRGB(cR, cG, cB);
+    for(int i = 0; i < ARRAYSIZE; i++){
+      soundLevels[i] = 0;
+    }    
+    sLvl = 0;
+    average = 0;
+    total = 0;
+    Serial.begin(115200);
 
-  if(soundLevel > 800){
-    strikes++;
-  }
-  //Sends out text if we're loud
-  if((averageOfA() > threshHold) || (strikes > 10)){
-    strikes = 0;
-    Serial.println("Pattern: loud");
+    dots = ".";
+    dotsCount = 1;
     delay(1000);
-  }
-
-  //Sends out text if knock
-  knock = knockAverageOfA();
-  //Serial.print("Knock Average: ");
-  //Serial.println(knock);
-  if((knock > knockThreshHold) && (shortAverageOfA() < knockThreshHold-30)){
-    Serial.println("Pattern: knock");
-    delay(1000);
-  }
-
-  //Sends output to display
-  sevseg.setNumber(flip(soundLevel),0);
-  
-  //Maintains a value on the screen and keeps a delay of 10ms 
-  for(int i = 0; i<10; i++){
-  delay(1);
-  sevseg.refreshDisplay();
-  }
-
-  //increments the count variable
-  count++;
-  if(count == 50){
-    count = 0;
-  }
 }
 
-  
-//Takes in input x and flips it. {1234} becomes {4321} (This code was written because our display was not working correctly)
-int flip(int x){
-  int a = x%10;
-  x -= a;
-  x /= 10;
-  int b = x%10;
-  x -= b;
-  x /= 10;
-  int c = x%10;
-  x -= c;
-  x /= 10;
-  int d = x;
-  return 1000 * a + 100 * b + 10 * c + d;
+void loop() 
+{
+    sLvl = analogRead(pinAdc);
+    
+    //lowpass filter
+    if(sLvl < 70){
+      sLvl = 70;
+    }
+    total = total - soundLevels[soundIndex];
+    soundLevels[soundIndex] = sLvl; //Adds sound level to the array at index soundIndex
+    total = total + soundLevels[soundIndex];
+    average = total/ARRAYSIZE;
+    
+    if(average>loud){
+      printTooLoud();
+      Serial.println("loud");
+
+      //clears array
+      for(int i = 0; i < ARRAYSIZE; i++){
+      soundLevels[i] = 0;
+      }
+      total = 0;
+      average = 0;
+    }
+
+    Serial.println(sLvl);
+    updateColor(sLvl);
+    printStats();
+
+    //causes the index to loop from 1 - 99;
+    soundIndex++;
+    if(soundIndex >= 100){
+      soundIndex = 0;
+    }
+    delay(100);
 }
 
-void fillArrayA(){
-  for(int i = 0; i < increments; i++){
-    a[i] = 0;
-  }
+void printStats(){
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Sound Level: ");
+    lcd.print(sLvl);
+    
+    // prints average
+    lcd.setCursor(0, 1);
+    lcd.print("Ave:");
+    //if average is less then quiet then the average is still building up, so it prints a dots animation
+    if(average < quiet){
+      lcd.print(dots);
+      dots = dots +('.');
+      dotsCount++;
+      if(dotsCount>4){
+        dots = "."; 
+        dotsCount=1;}
+    }else{
+      lcd.print(average);
+    }
+    
+    //prints Index
+    lcd.setCursor(8, 2);
+    lcd.print("Ind:");
+    lcd.print(soundIndex);
 }
 
-int averageOfA(){
-  int sum = 0;
-  for(int i =0; i < 50; i++){
-  sum = sum + a[i];
-  }
-  return (sum/50);
-}
+void printTooLoud(){
+    lcd.clear();
+    lcd.setRGB(255, 0, 0);//Sets color to red
+    //lcd.print("Too damn loud!");
 
-int knockAverageOfA(){
-  int sum = 0;
-  for(int i =10; i < 20; i++){
-  sum = sum + a[i];
-  }
-  return (sum/10);
-}
-
-int shortAverageOfA(){
-  int sum = 0;
-  for(int i=0; i<10; i++){
-    sum = sum +a[i];
-  }
-  for(int i=20; i<50; i++){
-    sum = sum +a[i];
-  }
-  return (sum/45);
-}
-
-//Rturns either 0 or 1 
-/*
-int thresh(int input){
-  if(input > threshHold){
-    return 1;
-  } else {
-    return 0;
+    for(int i = 0; i < 10; i++){
+      printStats();
+      lcd.setRGB(255, 255, 255);
+      delay(50);
+      lcd.setRGB(255, 0, 0);
+      delay(50);
     }
 }
-*/
 
-//Adds up (counts) the values in the a array of 50 ints (either 0 or 1) and returns an int
-/*
-int sumOfA(){
-  int count = 0;
-  for(int i = 0; i <increments; i++){
-    count = count + a[i];
-  }
-  return count;
+void updateColor(int soundLevel){
+    int colorVal = (255 * (sLvl-quiet))/(loud - quiet);
+    
+    cR = colorVal;
+    cB = 255 - colorVal;
+    cG = colorVal;
+    
+    if(cR > 255){cR = 255;}
+    if(cG > 255){cG = 255;}
+    if(cB > 255){cB = 255;}
+
+    if(cR < 0){cR = 0;}
+    if(cG < 0){cG = 0;}
+    if(cB < 0){cB = 0;}
+    
+    lcd.setRGB(cR, cG, cB);
 }
-*/
-
